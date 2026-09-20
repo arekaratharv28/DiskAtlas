@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Generated output files
+disk_dashboard.html
+!requirements.txt
+!README.md
+!LICENSE
