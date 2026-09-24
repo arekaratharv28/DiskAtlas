@@ -119,7 +119,7 @@ Format your response in plain text with emojis where appropriate. Do not use mar
 
 def main():
     parser = argparse.ArgumentParser(description="DiskAtlas: An interactive and AI-powered disk space analyzer.")
-    parser.add_argument("--drive", type=str, default=".", help="The directory or drive to scan (default: current directory)")
+    parser.add_argument("--drive", nargs="+", default=["."], help="The directory or drives to scan (default: current directory)")
     parser.add_argument("--depth", type=int, default=5, help="Maximum depth for the treemap hierarchy (default: 5)")
     parser.add_argument("--min-size", type=int, default=100, help="Minimum item size in MB to display (default: 100)")
     parser.add_argument("--exclude", nargs="*", default=["GoogleDrive", "OneDrive"], help="List of folder names/keywords to exclude")
@@ -127,17 +127,33 @@ def main():
     parser.add_argument("--ai-model", type=str, default=None, help="Specific model to use (e.g., gemini-1.5-pro for online, qwen2.5 for local)")
     args = parser.parse_args()
 
-    root_target = os.path.abspath(args.drive)
-    print(f"🔍 Scanning {root_target}... (Threshold: {args.min_size} MB)")
+    root_targets = [os.path.abspath(d) for d in args.drive]
+    print(f"🔍 Scanning {', '.join(root_targets)}... (Threshold: {args.min_size} MB)")
     print(f"🚫 Excluding: {', '.join(args.exclude)}")
     print("⏳ This may take a while depending on the size of the directory...")
 
     # 1. Collect Data
-    disk_data = scan_drive(root_target, args.exclude, args.depth)
-
-    # 2. Add Root Node
-    root_size = sum(item["Size"] for item in disk_data if item["Parent"] == root_target)
-    disk_data.append({"ID": root_target, "Parent": "", "Name": root_target, "Size": root_size, "Is_Dir": True})
+    disk_data = []
+    total_size = 0
+    
+    for root_target in root_targets:
+        data = scan_drive(root_target, args.exclude, args.depth)
+        disk_data.extend(data)
+        
+        # Add Root Node for this drive
+        root_size = sum(item["Size"] for item in data if item["Parent"] == root_target)
+        total_size += root_size
+        
+        if len(root_targets) > 1:
+            disk_data.append({"ID": root_target, "Parent": "Computer", "Name": root_target, "Size": root_size, "Is_Dir": True})
+        else:
+            disk_data.append({"ID": root_target, "Parent": "", "Name": root_target, "Size": root_size, "Is_Dir": True})
+            
+    if len(root_targets) > 1:
+        disk_data.append({"ID": "Computer", "Parent": "", "Name": "Computer", "Size": total_size, "Is_Dir": True})
+        root_target_display = ", ".join(root_targets)
+    else:
+        root_target_display = root_targets[0]
 
     # 3. Clean & Process
     df = pd.DataFrame(disk_data)
@@ -146,7 +162,7 @@ def main():
         return
 
     # Keep root and large items
-    is_large = (df["Size"] >= args.min_size * 1024 * 1024) | (df["ID"] == root_target)
+    is_large = (df["Size"] >= args.min_size * 1024 * 1024) | df["ID"].isin(root_targets) | (df["ID"] == "Computer")
     df_filtered = df[is_large].copy()
 
     # Create Filler nodes (Cross-platform compatible)
@@ -266,11 +282,11 @@ def main():
             <div class="stats-grid">
                 <div class="stat-box">
                     <div class="stat-label">Directory Scanned</div>
-                    <div class="stat-value" style="font-size: 18px; word-break: break-all;">{root_target}</div>
+                    <div class="stat-value" style="font-size: 18px; word-break: break-all;">{root_target_display}</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-label">Total Size Found</div>
-                    <div class="stat-value" style="color: var(--accent);">{format_size(root_size)}</div>
+                    <div class="stat-value" style="color: var(--accent);">{format_size(total_size)}</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-label">Large Items (>{args.min_size}MB)</div>

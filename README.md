@@ -43,6 +43,9 @@ python disk_atlas.py
 
 # Scan a specific drive and exclude folders
 python disk_atlas.py --drive D:\ --min-size 50 --exclude node_modules .git OneDrive
+
+# Scan multiple drives at once
+python disk_atlas.py --drive C:\ D:\ --min-size 100
 ```
 
 ### 🧠 Using the AI Advisor
